@@ -1,0 +1,61 @@
+blueprint:
+  name: Multicontrol n entities (slave)
+  description: |
+    ## Link On/Off State of Multiple Devices v2.0.0 (slave relays)
+
+    Links the on/off state of relays with slave relays (relays that follow, for example switches kept in sync together by Zigbee bindings).
+
+    ### Inputs
+    * **Relays** - state changes are processed. The first change to on or off is sent immediately to the other relays and to the slave relays (`homeassistant.turn_on` / `homeassistant.turn_off`).
+    * **Slave relays** - their state is never read and their state changes never trigger anything.
+
+    The state changes of the **relays** are masked until they are stable: every relay change, even a masked one, restarts a 1 s delay.
+
+    ### Requirements
+    * All selected entities MUST suport `homeassistant.turn_on` and `homeassistant.turn_off` or errors will be logged and the blueprint will not work.
+    * Requires Home Assistant 2024.10.0 or newer.
+
+    ### Credits
+    * [@adchevrier](https://community.home-assistant.io/u/adchevrier) for the [initial blueprint](https://community.home-assistant.io/t/synchronize-the-on-off-state-of-2-entities/259010)
+    * [@hebus](https://community.home-assistant.io/u/hebus) for [this fantastic template](https://community.home-assistant.io/t/synchronize-the-on-off-state-of-2-entities/259010/38)
+  domain: automation
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    relays:
+      name: Relays (state changes processed)
+      selector:
+        entity:
+          multiple: true
+    slave_relays:
+      name: Slave relays (state never read)
+      selector:
+        entity:
+          multiple: true
+
+trace:
+    stored_traces: 10
+
+mode: restart
+
+variables:
+  relays: !input 'relays'
+  slave_relays: !input 'slave_relays'
+
+triggers:
+- trigger: state
+  entity_id: !input 'relays'
+  to: ['on', 'off']
+
+actions:
+- if: '{{ this.attributes.current == 0 }}'
+  then:
+  - action: homeassistant.turn_{{ trigger.to_state.state }}
+    target:
+      entity_id: '{{ expand(relays + slave_relays) | selectattr("entity_id", "!=", trigger.entity_id) | map(attribute="entity_id") | list }}'
+
+- delay:
+    hours: 0
+    minutes: 0
+    seconds: 1
+    milliseconds: 0

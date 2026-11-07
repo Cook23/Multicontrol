@@ -1,0 +1,90 @@
+blueprint:
+  name: Multicontrol n entities (hybrid)
+  description: |
+    ## Link On/Off State of Multiple Devices v2.0.0 (hybrid groups)
+
+    Links the on/off state of relays that have no separate switch (stock devices) with switches that have one (separate switch and relay endpoints, kept in sync together by Zigbee bindings).
+
+    ### Inputs
+    * **Relays** - state changes are processed. When one changes to on or off, the internal bit takes that state and the other relays receive a matching `homeassistant.turn_on` / `homeassistant.turn_off`.
+    * **Switch press** - the "switch press action" entities of the switches. Each press (`press`) toggles the internal bit, and the bit is sent to the relays. A press is never ignored.
+    * **Slave relays** - the relays of those switches. Their state is never read and their state changes never trigger anything. After a press they are already set by the direct Zigbee link; 1 s after the last event they are written with the value of the internal bit, which only confirms that state.
+    * **Internal state bit** - one `input_boolean` helper per group, to create beforehand.
+
+    The state changes of the **relays** are masked until they are stable: every event, even a masked one, restarts a 1 s delay. Presses are never masked.
+
+    ### Requirements
+    * All selected entities MUST suport `homeassistant.turn_on` and `homeassistant.turn_off` or errors will be logged and the blueprint will not work.
+    * Requires Home Assistant 2024.10.0 or newer.
+
+    ### Credits
+    * [@adchevrier](https://community.home-assistant.io/u/adchevrier) for the [initial blueprint](https://community.home-assistant.io/t/synchronize-the-on-off-state-of-2-entities/259010)
+    * [@hebus](https://community.home-assistant.io/u/hebus) for [this fantastic template](https://community.home-assistant.io/t/synchronize-the-on-off-state-of-2-entities/259010/38)
+  domain: automation
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    relays:
+      name: Relays (state changes processed)
+      selector:
+        entity:
+          multiple: true
+    switch_press:
+      name: Switch press (press action entities)
+      default: []
+      selector:
+        entity:
+          multiple: true
+    slave_relays:
+      name: Slave relays (state never read)
+      default: []
+      selector:
+        entity:
+          multiple: true
+    state_bit:
+      name: Internal state bit (input_boolean helper)
+      selector:
+        entity:
+          domain: input_boolean
+
+trace:
+    stored_traces: 10
+
+mode: restart
+
+variables:
+  relays: !input 'relays'
+  slave_relays: !input 'slave_relays'
+  state_bit: !input 'state_bit'
+  first: '{{ trigger.id == "press" or this.attributes.current == 0 }}'
+
+triggers:
+- trigger: state
+  entity_id: !input 'relays'
+  to: ['on', 'off']
+  id: relay
+- trigger: state
+  entity_id: !input 'switch_press'
+  to: press
+  id: press
+
+actions:
+- if: '{{ first }}'
+  then:
+  - action: "input_boolean.{{ 'toggle' if trigger.id == 'press' else 'turn_' ~ trigger.to_state.state }}"
+    target:
+      entity_id: '{{ state_bit }}'
+
+  - action: homeassistant.turn_{{ states(state_bit) }}
+    target:
+      entity_id: '{{ expand(relays if trigger.id == "press" else relays + slave_relays) | selectattr("entity_id", "!=", trigger.entity_id) | map(attribute="entity_id") | list }}'
+
+- delay:
+    hours: 0
+    minutes: 0
+    seconds: 1
+    milliseconds: 0
+
+- action: homeassistant.turn_{{ states(state_bit) }}
+  target:
+    entity_id: !input 'slave_relays'
