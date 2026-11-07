@@ -22,10 +22,11 @@ Setup in Zigbee2MQTT, for two switches A and B:
 - Flash the firmware (see the [supported devices](https://github.com/romasku/tuya-zigbee-switch/blob/main/docs/supported_devices.md) and the project documentation) and load the project's external converters.
 - On each switch, set `Switch action mode` to `toggle_smart_sync`: a press toggles the relay and sends ON or OFF, matching the relay state, to the bindings.
 - In the Bind tab of A: source endpoint 1 → B, destination endpoint 2 (relay), cluster `genOnOff`. Same from B to A.
-- Set `Switch relay mode` to `press_start`. With `short_press` and a direct binding, the relay state and the press / long_press actions of the pressed switch were no longer shown in Zigbee2MQTT ([issue #548](https://github.com/romasku/tuya-zigbee-switch/issues/548)). With `press_start`, a long press toggles the local relay but sends nothing to the bindings.
+- Set `Switch relay mode` to `press_start` (keep `Switch binded mode` at `short_press`). With `short_press` and a direct binding, the pressed switch toggles its relay but its new state is not reported: Zigbee2MQTT and Home Assistant keep the old state until it is read again (refresh). The bound switches report normally ([issue #548](https://github.com/romasku/tuya-zigbee-switch/issues/548), same symptom as [#74](https://github.com/romasku/tuya-zigbee-switch/issues/74)). With `press_start`, the relay toggles at press and the bound command is sent at release, and the state is reported.
+- Side effect of `press_start`: a long press toggles the local relay but sends nothing to the bindings, so the switches stay out of sync until the next short press. A long `Switch long press duration` (for example 5000 ms) makes this unlikely.
 - For more than two switches, the firmware documentation describes binding to a Zigbee group. It also lists that end devices do not respond to group commands: use the router build.
 
-A command sent from Home Assistant to one relay is not propagated by the bindings: only physical presses are. This is what the `slave` and `hybrid` blueprints below take care of.
+A command sent from Home Assistant to one relay is not propagated by the bindings: only physical presses are. This is what the `slave` and `hybrid` blueprints below take care of. They never read the state of the slave relays, so a missing state report (issue #548 above) does not affect them.
 
 ## The blueprints
 
