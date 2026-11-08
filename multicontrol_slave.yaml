@@ -1,7 +1,7 @@
 blueprint:
   name: Multicontrol n entities (slave)
   description: |
-    ## Link On/Off State of Multiple Devices v2.0.0 (slave relays)
+    ## Link On/Off State of Multiple Devices v2.1.0 (slave relays)
 
     Links the on/off state of relays with slave relays (relays that follow, for example switches kept in sync together by Zigbee bindings).
 
@@ -9,7 +9,9 @@ blueprint:
     * **Relays** - state changes are processed. The first change to on or off is sent immediately to the other relays and to the slave relays (`homeassistant.turn_on` / `homeassistant.turn_off`).
     * **Slave relays** - their state is never read and their state changes never trigger anything.
 
-    The state changes of the **relays** are masked until they are stable: every relay change, even a masked one, restarts a 1 s delay.
+    With several **relays**, their state changes are masked until they are stable: every relay change, even a masked one, restarts a 1 s delay.
+
+    With a single **relay**, there is no masking: every change is sent immediately. The relay never receives a command from the automation, so there is no loop and no risk of oscillation.
 
     ### Requirements
     * All selected entities MUST suport `homeassistant.turn_on` and `homeassistant.turn_off` or errors will be logged and the blueprint will not work.
@@ -48,14 +50,16 @@ triggers:
   to: ['on', 'off']
 
 actions:
-- if: '{{ this.attributes.current == 0 }}'
+- if: '{{ relays | length == 1 or this.attributes.current == 0 }}'
   then:
   - action: homeassistant.turn_{{ trigger.to_state.state }}
     target:
       entity_id: '{{ expand(relays + slave_relays) | selectattr("entity_id", "!=", trigger.entity_id) | map(attribute="entity_id") | list }}'
 
-- delay:
-    hours: 0
-    minutes: 0
-    seconds: 1
-    milliseconds: 0
+- if: '{{ relays | length > 1 }}'
+  then:
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: 1
+      milliseconds: 0

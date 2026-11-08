@@ -50,6 +50,8 @@ Inputs: `relays`, `slave_relays`.
 
 The first unmasked change of a relay is sent immediately to the other relays and to the slave relays.
 
+With a single entity in `relays`, there is no masking delay: every change of that relay is sent immediately to the slave relays. The relay never receives a command from the automation and the slave relays are never read, so the loop is open and cannot oscillate.
+
 ### `multicontrol_hybrid.yaml`
 
 Inputs: `relays`, `switch_press`, `slave_relays`, `state_bit`.
